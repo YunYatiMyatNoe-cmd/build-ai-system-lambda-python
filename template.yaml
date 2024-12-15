@@ -5,57 +5,76 @@ Description: >
 
   Sample SAM Template for build-ai-system-backend-lambda-python
 
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
-
+    Timeout: 600
     Tracing: Active
-    # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
   Api:
     TracingEnabled: true
+
 Resources:
+  BuildAISystemApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: BuildAISystemApi
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+
   BuildAISystemFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: build-ai-system/
       Handler: app.lambda_handler
       Runtime: python3.12
       Architectures:
-      - x86_64
-
-    Events:
+        - x86_64
+      Environment:
+        Variables:
+          SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhzanpia2dzcXR2bHp5cWVxYm14Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzAzMzgxMTksImV4cCI6MjA0NTkxNDExOX0.RJp6Eto7a9bR5NjLPKmH_9oHC-7SNp7IEAdzQWQ8-HE
+      Role: !GetAtt BuildAISystemRole.Arn
+      Events:
         ProxyApi:
           Type: Api
           Properties:
+            RestApiId: !Ref BuildAISystemApi
             Path: /{proxy+}
             Method: POST
 
-  ApplicationResourceGroup:
-    Type: AWS::ResourceGroups::Group
+  BuildAISystemRole:
+    Type: AWS::IAM::Role
     Properties:
-      Name:
-        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
-      ResourceQuery:
-        Type: CLOUDFORMATION_STACK_1_0
-  ApplicationInsightsMonitoring:
-    Type: AWS::ApplicationInsights::Application
-    Properties:
-      ResourceGroupName:
-        Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: 'true'
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaAllowAmazonBedrock
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0" # Replace with specific model ARN if needed
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  BuildAISystemApi:
+  BuildAISystemApiUrl:
     Description: API Gateway endpoint URL for Prod stage for BuildAISystem function
-    Value: !Sub "https://${BuildAISystemApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/{proxy+}/"
-  BuildAISystemFunction:
+    Value: !Sub "https://${BuildAISystemApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/{proxy+}"
+  BuildAISystemFunctionArn:
     Description: BuildAISystem Lambda Function ARN
     Value: !GetAtt BuildAISystemFunction.Arn
   BuildAISystemFunctionIamRole:
-    Description: Implicit IAM Role created for BuildAISystem function
-    Value: !GetAtt BuildAISystemFunctionRole.Arn
+    Description: IAM Role for BuildAISystem function
+    Value: !GetAtt BuildAISystemRole.Arn

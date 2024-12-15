@@ -1,1 +1,3 @@
 requests
+supabase
+PyPDF2
